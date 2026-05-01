@@ -140,4 +140,18 @@ public class FlightRepository {
     public void clearAll() {
         store.clear();
     }
+
+    /**
+     * Clears all flights from the store and re-runs the seed data logic.
+     * <p>
+     * Intended exclusively for integration test {@code @BeforeEach} setup, where each
+     * test must start from the same known set of pre-seeded flights (FL100, FL200, FL300)
+     * with their original seat counts fully restored.
+     * Should not be called in production flows.
+     * </p>
+     */
+    public void resetAndSeed() {
+        store.clear();
+        seedData();
+    }
 }

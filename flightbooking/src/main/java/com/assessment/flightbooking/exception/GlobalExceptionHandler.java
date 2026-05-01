@@ -4,13 +4,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
-
 /**
  * Central exception handling component for the flight booking API.
  * <p>
@@ -56,7 +56,6 @@ public class GlobalExceptionHandler {
     // -------------------------------------------------------------------------
     // 409 Conflict
     // -------------------------------------------------------------------------
-
     @ExceptionHandler(FlightFullException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleFlightFull(FlightFullException ex) {
@@ -71,12 +70,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleValidation(MethodArgumentNotValidException ex) {
-        // Each FieldError carries a defaultMessage from the @NotBlank / @Email annotation.
-        // We collect them all into one string so the client receives a single, complete
-        // list of what needs to be fixed rather than just the first failing field.
-        String aggregated = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-                .collect(Collectors.joining("; "));
+    String aggregated = ex.getBindingResult().getFieldErrors().stream()
+            .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
+            .collect(Collectors.joining("; "));
 
         log.warn("Validation failed: {}", aggregated);
         return buildError(HttpStatus.BAD_REQUEST, aggregated);
@@ -89,6 +85,17 @@ public class GlobalExceptionHandler {
         return buildError(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String paramName = ex.getName();
+        String requiredType = ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "unknown";
+        String message = String.format("Invalid value for parameter '%s'. Expected type: %s", paramName, requiredType);
+
+        log.warn("MethodArgumentTypeMismatchException: {}", message);
+        return buildError(HttpStatus.BAD_REQUEST, message);
+    }
+    
     // -------------------------------------------------------------------------
     // 500 Internal Server Error (fallback)
     // -------------------------------------------------------------------------
