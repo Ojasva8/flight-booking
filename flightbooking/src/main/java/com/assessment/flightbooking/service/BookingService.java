@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Core business logic for the flight booking system.
@@ -60,15 +61,19 @@ public class BookingService {
                     throw new FlightNotFoundException(flightNumber);
                 });
 
-        // Synchronize on the specific Flight instance to prevent two concurrent threads from
-        // both reading availableSeats > 0, both decrementing, and thus overboooking the flight.
-        synchronized (flight) {
+        // Use the per-flight lock to prevent two concurrent threads from
+        // both reading availableSeats > 0, both decrementing, and thus overbooking the flight.
+        ReentrantLock lock = flightRepository.getLockForFlight(flightNumber);
+        lock.lock();
+        try {
             if (flight.getAvailableSeats() <= 0) {
                 log.warn("Attempt to book fully booked flight {}", flightNumber);
                 throw new FlightFullException(flightNumber);
             }
             flight.setAvailableSeats(flight.getAvailableSeats() - 1);
             flightRepository.save(flight);
+        } finally {
+            lock.unlock();
         }
 
         Booking booking = Booking.builder()
@@ -111,11 +116,15 @@ public class BookingService {
                     throw new FlightNotFoundException(booking.getFlightNumber());
                 });
 
-        // Synchronize on the Flight instance so that seat restoration is atomic with respect
+        // Acquire the per-flight lock so that seat restoration is atomic with respect
         // to any concurrent createBooking calls targeting the same flight.
-        synchronized (flight) {
+        ReentrantLock lock = flightRepository.getLockForFlight(booking.getFlightNumber());
+        lock.lock();
+        try {
             flight.setAvailableSeats(flight.getAvailableSeats() + 1);
             flightRepository.save(flight);
+        } finally {
+            lock.unlock();
         }
 
         bookingRepository.deleteById(bookingId);

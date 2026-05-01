@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * In-memory repository for {@link Flight} entities, keyed by flight number.
@@ -34,6 +35,11 @@ public class FlightRepository {
      * ConcurrentHashMap guarantees atomic per-key operations and safe concurrent iteration.
      */
     private final ConcurrentHashMap<String, Flight> store = new ConcurrentHashMap<>();
+
+    /**
+     * Locks per flight to manage concurrent bookings without synchronizing on mutable objects.
+     */
+    private final ConcurrentHashMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
 
     public FlightRepository() {
         log.info("FlightRepository in-memory store initialised and ready.");
@@ -100,6 +106,16 @@ public class FlightRepository {
     }
 
     /**
+     * Retrieves the lock associated with a specific flight number.
+     *
+     * @param flightNumber the flight number to get the lock for
+     * @return the {@link ReentrantLock} for the flight
+     */
+    public ReentrantLock getLockForFlight(String flightNumber) {
+        return locks.computeIfAbsent(flightNumber, k -> new ReentrantLock());
+    }
+
+    /**
      * Looks up a flight by its unique flight number.
      *
      * @param flightNumber the natural key to search by
@@ -139,6 +155,7 @@ public class FlightRepository {
      */
     public void clearAll() {
         store.clear();
+        locks.clear();
     }
 
     /**
@@ -152,6 +169,7 @@ public class FlightRepository {
      */
     public void resetAndSeed() {
         store.clear();
+        locks.clear();
         seedData();
     }
 }
